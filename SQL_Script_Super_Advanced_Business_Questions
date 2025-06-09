@@ -1,0 +1,116 @@
+-- 23.	Find the top 3 employees by average revenue per order they’ve handled.
+-- We have to create 2 CTEs to obtain Product revenue and the Average Revenue per Category.
+-- Lastly we comapare them in the main select statement.
+WITH Revenue_per_Product AS (
+    SELECT 
+        P.ProductID, 
+        P.ProductName AS Product, 
+        P.CategoryID, 
+        ROUND(SUM(OD.Quantity * P.Price), 0) AS Product_Total_Revenue
+    FROM Products P
+    LEFT JOIN OrderDetails OD ON P.ProductID = OD.ProductID
+    LEFT JOIN Categories C ON C.CategoryID = P.CategoryID
+    GROUP BY P.ProductID
+), Category_Revenue AS (
+    SELECT 
+        C.CategoryID, 
+        C.CategoryName AS Category, 
+        ROUND(AVG(OD.Quantity * P.Price), 0) AS Avg_Category_Revenue
+    FROM Products P
+    LEFT JOIN OrderDetails OD ON P.ProductID = OD.ProductID
+    LEFT JOIN Categories C ON C.CategoryID = P.CategoryID
+    GROUP BY C.CategoryID
+)
+SELECT 
+    RP.Product, 
+	CR.Category,
+    RP.Product_Total_Revenue, 
+    CR.Avg_Category_Revenue
+FROM Revenue_per_Product RP
+JOIN Category_Revenue CR ON CR.CategoryID = RP.CategoryID
+WHERE RP.Product_Total_Revenue > CR.Avg_Category_Revenue
+ORDER BY RP.Product_Total_Revenue DESC;
+
+-- Out of curiosity and from a business standpoint. I am going to find out which products are generating less than the Average
+WITH Revenue_per_Product AS (
+    SELECT 
+        P.ProductID, 
+        P.ProductName AS Product, 
+        P.CategoryID, 
+        ROUND(SUM(OD.Quantity * P.Price), 0) AS Product_Total_Revenue
+    FROM Products P
+    LEFT JOIN OrderDetails OD ON P.ProductID = OD.ProductID
+    LEFT JOIN Categories C ON C.CategoryID = P.CategoryID
+    GROUP BY P.ProductID
+), Category_Revenue AS (
+    SELECT 
+        C.CategoryID, 
+        C.CategoryName AS Category, 
+        ROUND(AVG(OD.Quantity * P.Price), 0) AS Avg_Category_Revenue
+    FROM Products P
+    LEFT JOIN OrderDetails OD ON P.ProductID = OD.ProductID
+    LEFT JOIN Categories C ON C.CategoryID = P.CategoryID
+    GROUP BY C.CategoryID
+)
+SELECT 
+    RP.Product, 
+	CR.Category,
+    RP.Product_Total_Revenue, 
+    CR.Avg_Category_Revenue
+FROM Revenue_per_Product RP
+JOIN Category_Revenue CR ON CR.CategoryID = RP.CategoryID
+WHERE RP.Product_Total_Revenue < CR.Avg_Category_Revenue
+ORDER BY RP.Product_Total_Revenue;
+
+-- 25.	For each customer, find the date of their first order.
+-- Use of INNER JOIN to avoid incluiding those customers with no orders.
+select CustomerName, Country Location, Min(o.orderdate) First_Order_Date
+from Customers C
+inner join orders O on O.CustomerID = c.CustomerID
+group by c.CustomerID
+order by O.OrderDate
+;
+-- 26.	Identify the month with the highest total revenue.
+WITH Monthly_Orders as (
+	select strftime('%Y-%m', OrderDate) AS Year_Month, count (DISTINCT O.orderid) Orders_Received, round(sum(price*quantity),0) Revenue
+	from Orders o
+	INNER join OrderDetails OD on od.OrderID=o.OrderID
+	inner join Products P ON P.ProductID=OD.ProductID
+	group by Year_Month
+	)
+select 
+	RANK() OVER (ORDER BY Orders_Received DESC) AS Month_Rank,
+	year_month, 
+	Revenue, 
+	orders_received,
+	round(Revenue/Orders_received,0) Avg_Revenue_per_Order
+from Monthly_Orders
+group by year_month
+order by Revenue Desc
+;
+
+-- 27. Identify the months in which each product generated its highest revenue.
+WITH Product_Revenue AS (
+  SELECT 
+    RANK() OVER (PARTITION BY p.ProductID ORDER BY SUM(od.Quantity * p.Price) DESC) AS Rank,
+    p.ProductID, 
+    p.ProductName AS Product, 
+    strftime('%Y-%m', o.OrderDate) AS Year_Month,
+    SUM(od.Quantity * p.Price) AS Revenue,
+	Avg(od.Quantity * p.Price) as Avg_Revenue
+  FROM Products p
+  LEFT JOIN OrderDetails od ON od.ProductID = p.ProductID
+  LEFT JOIN Orders o ON o.OrderID = od.OrderID
+  GROUP BY p.ProductID, Year_Month
+)
+
+SELECT 
+  Rank, 
+  ProductID, 
+  Product, 
+  Year_Month, 
+  ROUND(Revenue, 0) AS Highest_Revenue,
+  Round(Avg_Revenue,0) Monthly_Avg_Revenue
+FROM Product_Revenue
+WHERE Rank = 1
+ORDER BY Revenue DESC;
