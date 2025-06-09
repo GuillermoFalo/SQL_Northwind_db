@@ -1,0 +1,84 @@
+-- 1. Provide a list of all customers along with their contact names
+select CustomerName, ContactName, Address
+from Customers;
+
+-- 2. Retrieve all available products, including their respective category names.
+-- First, quick look into how many products per category we have.
+Select C.CategoryName Category, count(P.categoryid) as Products_per_category
+from Categories C
+join products P on P.CategoryID = C.CategoryID 
+group by Category;
+
+-- Identifying all the products and their categories
+select P.ProductName Product, C.categoryname Category 
+from Products P
+join Categories C on P.CategoryID = C.CategoryID
+order by Category; 
+
+-- 3.	Generate a report of all orders placed during the year 1997.
+-- We are going to triple join tables to access names instead of ids for a more accurate report
+select O.OrderDate, C.CustomerName, C.ContactName Customer_Contact_Name, E.FIRSTNAME || ' ' || E.LASTNAME AS Employee_Name, S.ShipperName Logistic_Company
+from Orders O
+join Shippers S on S.ShipperID = O.ShipperID
+join Customers C on C.CustomerID = O.CustomerID
+JOIN Employees E ON E.EmployeeID= O.EmployeeID
+where O.OrderDate like '1997%';
+
+-- 4. Who is working with us for shipping purposes? Give me a full report on their performance.
+select ShipperName Logistic_Company , sum(Quantity*price) AS USD_Shipped, count(O.orderid) Orders_Shipped, sum(OD.QUANTITY) Quantity_Shipped, max(OD.QUANTITY) Max_Quanity_Shipped
+from Shippers S
+join orders O on S.ShipperID = o.ShipperID
+JOIN OrderDetails OD on OD.OrderID = O.OrderID
+join Products P on P.ProductID = OD.ProductID
+group by ShipperName;
+
+-- 5.	List all suppliers currently providing products to our company.
+select SupplierName Supplier_Company, City || ' (' || Country || ')' AS Location, count(P.SUPPLIERID) Products_Supplied
+from Suppliers S
+join products P on p.SupplierID = S.SupplierID
+join Categories C on C.CategoryID = P.CategoryID
+group by Supplier_Company
+ORDER BY pRODUCTS_sUPPLIED desc;
+
+-- Now we know who are suppliers are but what does each supplier supply us with?
+SELECT S.SupplierName AS Supplier,C.CategoryName AS Category, SUM(OD.Quantity) AS Total_Quantity_Sold_Supplied
+FROM Suppliers S
+JOIN Products P ON P.SupplierID = S.SupplierID
+JOIN Categories C ON C.CategoryID = P.CategoryID
+JOIN OrderDetails OD ON OD.ProductID = P.ProductID
+GROUP BY S.SupplierName,C.CategoryName
+ORDER BY Supplier,Category;
+
+-- 6. How are our products doing? List all our products with their most relevant info about performance.
+select ProductName Product, C.CategoryName Product_Category, Price, Quantity Q_Sold, Round(Sum(price*quantity),1) Revenue_Generated
+from products P
+join OrderDetails OD on OD.ProductID = P.ProductID
+join Categories C on C.CategoryID = P.CategoryID
+Group by Product
+order by Revenue_Generated DESC
+; 
+
+-- 7. Provide relevant information on our world presence
+-- First approach to all our customers and their residency
+select CustomerName Customer, City, Country
+from customers;
+
+-- Now provide data on the countries to evaluate where we should focus our efforts
+select DISTINCT
+country, count(CustomerName) Customers_per_Country, sum(quantity*price) Revenue_Accum, Round(SUM(quantity * price) * 1.0 / COUNT(CustomerName)) AS Avg_Revenue
+from customers C
+join orders O ON O.CustomerID = C.CustomerID
+join OrderDetails OD on OD.OrderID = O.OrderID
+JOIN Products P ON P.ProductID = OD.ProductID
+group by Country
+having count(CustomerName) >= 10
+order by Avg_Revenue desc,Revenue_Accum DESC;
+
+-- 8. Report how many orders each employee has processed.. Look into their performance to asses potential layoff
+Select FirstName, LastName, CAST(strftime('%Y', 'now') AS INTEGER) - CAST(strftime('%Y', BirthDate) AS INTEGER) 
+        - (strftime('%m-%d', 'now') < strftime('%m-%d', BirthDate)) AS Age,
+		count(orderid) Sales_per_Rep, Notes
+from Employees E
+join Orders O on O.EmployeeID = E.EmployeeID
+group by FirstName
+order by Sales_per_Rep, Age Desc;
