@@ -1,0 +1,116 @@
+-- 18.	Rank customers by total revenue within their respective countries.
+-- We will use Rank & over partition by to assing a rank number based on customer's country
+select  DISTINCT c.CustomerID, c.CustomerName, country,
+	RANK() OVER (PARTITION BY c.Country ORDER BY SUM(od.Quantity * p.Price) DESC) AS Country_Revenue_Rank,
+	sum(quantity*price) Revenue_Accum
+from Customers c
+join Orders o on o.customerid = c.CustomerID
+join OrderDetails od on od.OrderID = o.OrderID
+join Products p on p.ProductID = od.ProductID
+group by c.CustomerID
+order by country;
+
+-- 19.	Identify the top 3 customers whose order value is at least 20% higher than the overall average. 
+WITH Order_Revenue_Generated AS (
+    SELECT 
+        o.OrderID,
+        o.CustomerID,
+        SUM(od.Quantity * p.Price) AS Revenue_Generated
+    FROM Orders o
+    JOIN OrderDetails od ON o.OrderID = od.OrderID
+    JOIN Products p ON od.ProductID = p.ProductID
+    GROUP BY o.OrderID, o.CustomerID
+),
+Avg_Revenue AS (
+    SELECT ROUND(AVG(Revenue_Generated), 0) AS Avg_Rev_Orders
+    FROM Order_Revenue_Generated
+)
+SELECT
+    c.CustomerName,
+    org.Revenue_Generated,
+    ar.Avg_Rev_Orders
+FROM Order_Revenue_Generated org
+CROSS JOIN Avg_Revenue ar
+JOIN Customers c ON c.CustomerID = org.CustomerID
+WHERE org.Revenue_Generated >= ar.Avg_Rev_Orders * 1.2
+ORDER BY org.Revenue_Generated DESC
+LIMIT 3;
+
+-- 20.	Determine the month-over-month revenue trends across all orders.
+select *
+from Orders
+order by OrderDate;
+
+with Month_Date As (
+		  select
+				OrderID,
+				OrderDate,
+				strftime('%Y', OrderDate) || '-' || strftime('%m', OrderDate) AS Year_Month
+FROM Orders 
+ORDER BY Year_Month
+)
+select Year_month, sUM(QUANTITY*PRICE) Total_Revenue
+from month_date MD
+join OrderDetails OD on MD.OrderID = od.OrderID
+JOIN Products P ON P.ProductID = OD.ProductID
+group by year_month;
+
+-- To make it visually easy to read we will add a column to indicate whether there is an increase or decrease in revenue from month to month
+WITH Month_Date AS (
+  SELECT
+    OrderID,
+    OrderDate,
+    strftime('%Y-%m', OrderDate) AS Year_Month
+  FROM Orders
+),
+Monthly_Revenue AS (
+  SELECT 
+    MD.Year_Month, 
+    SUM(OD.Quantity * P.Price) AS Total_Revenue
+  FROM Month_Date MD
+  JOIN OrderDetails OD ON MD.OrderID = OD.OrderID
+  JOIN Products P ON P.ProductID = OD.ProductID
+  GROUP BY MD.Year_Month
+)
+
+SELECT
+  Year_Month,
+  Total_Revenue,
+  LAG(Total_Revenue) OVER (ORDER BY Year_Month) AS Prev_Month_Revenue,
+  CASE
+    WHEN LAG(Total_Revenue) OVER (ORDER BY Year_Month) IS NULL THEN 'N/A'
+    WHEN Total_Revenue > LAG(Total_Revenue) OVER (ORDER BY Year_Month) THEN 'Increase'
+    WHEN Total_Revenue < LAG(Total_Revenue) OVER (ORDER BY Year_Month) THEN 'Decrease'
+    ELSE 'No Change'
+  END AS Revenue_Trend
+FROM Monthly_Revenue
+ORDER BY Year_Month;
+
+-- 21.	Provide a category-level revenue report using common table expressions.
+Select CategoryName Category, Round(Sum(quantity*price),0) Reveneue_Generated
+from Categories C
+Join products P on P.CategoryID = C.CategoryID
+join OrderDetails OD on OD.OrderID = OD.OrderID
+GROUP BY CategoryName
+order by Reveneue_Generated Desc;
+-- 22.	Identify the top 5 customers who have purchased the widest variety of different products.
+-- By widest variety we understand the customer with the most different products purchased, meaning they have to be distinct. 
+select C.CustomerID, CustomerName Customer, C.Country Location, count(DISTINCT P.ProductName) Products_per_Customer
+from customers C
+join orders O on O.CustomerID=C.CustomerID
+JOIN OrderDetails OD ON OD.OrderID = O.OrderID
+JOIN Products P ON P.ProductID = OD.ProductID
+group by C.CustomerID
+ORDER BY Products_per_Customer DESC
+LIMIT 5;
+-- 23. Find Customers with no orders in yet
+-- We query a FULL JOIN to aggreagte ALL the possibilities for the Customers. 
+-- Then we can find out those Customers with no OrderId related to their ID which are customers with no orders yet.
+select C.CustomerID, CustomerName Customer, O.OrderID
+from Customers C
+FULL join Orders O on O.CustomerID = c.CustomerID
+where 
+	OrderId is Null
+	AND
+	C.CustomerID is not NULL
+order by OrderID ;
